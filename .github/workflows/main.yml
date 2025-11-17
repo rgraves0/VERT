@@ -1,21 +1,44 @@
 name: MLTB IMG
 
-on: workflow_dispatch
+on:
+  # Manual Trigger အတွက် မှန်ကန်သော YAML ပုံစံ
+  workflow_dispatch:
       
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Login to Docker Hub
-      uses: docker/login-action@v2
-      with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_PW }}
-    - name: Building docker
-      run: docker image build . -t "${{ secrets.DOCKER_HUB_USERNAME }}"/main:converter
+    - name: Checkout Repository
+      uses: actions/checkout@v4 # ပိုမိုလုံခြုံပြီး စွမ်းဆောင်ရည်မြင့်မားသော v4 ကို အသုံးပြုပါ။
 
-    - name: Pushing docker to docker.io
-      run: docker push "${{ secrets.DOCKER_HUB_USERNAME }}"/main:converter
+    - name: Set up Docker Buildx
+      # Multi-platform build နှင့် စွမ်းဆောင်ရည်မြှင့်တင်ရန်အတွက် မရှိမဖြစ်လိုအပ်သည်။
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3 # နောက်ဆုံးပေါ် v3 ကို အသုံးပြုပါ။
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_PW }}
+        
+    - name: Define Dynamic Image Tag
+      # Build တိုင်းအတွက် မတူညီသော tag တစ်ခုရရန် github.run_id ကို အသုံးပြုခြင်း။
+      id: set_tag
+      run: |
+        echo "DOCKER_TAG=converter-${{ github.run_id }}" >> $GITHUB_OUTPUT
+        
+    - name: Building and Pushing Docker Image
+      # Build နှင့် Push ကို တစ်ပြိုင်နက်တည်း ပြုလုပ်ရန် docker/build-push-action ကို သုံးပါ။ (ပိုမိုထိရောက်မှုရှိသည်)
+      uses: docker/build-push-action@v5
+      with:
+        context: . 
+        push: true 
+        # tags များကို latest နှင့် dynamic tag နှစ်ခုစလုံးနှင့် သတ်မှတ်ခြင်း။
+        tags: |
+          ${{ secrets.DOCKER_HUB_USERNAME }}/main:latest
+          ${{ secrets.DOCKER_HUB_USERNAME }}/main:${{ steps.set_tag.outputs.DOCKER_TAG }}
+
+    - name: Verification
+      run: |
+        echo "Image ကို latest နှင့် ${{ steps.set_tag.outputs.DOCKER_TAG }} tag များဖြင့် အောင်မြင်စွာ build လုပ်ပြီး push လုပ်လိုက်ပါပြီ။"
